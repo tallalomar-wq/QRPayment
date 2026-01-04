@@ -1,23 +1,47 @@
 # QR Payment System
 
-A complete QR code-based payment system with React frontend and Node.js backend, integrated with Stripe for payment processing.
+A complete QR code-based payment system with React frontend and Node.js backend, integrated with Stripe for payment processing. Designed for the informal economy with focus on simplicity and cashless transactions.
 
 ## Features
 
 ✨ **Generate QR Codes** - Create payment QR codes with custom amounts and descriptions  
 📱 **Mobile-Friendly** - Scan QR codes with any device to make payments  
 💳 **Stripe Integration** - Secure payment processing with Stripe  
+💾 **Save Payment Methods** - Customers can save cards for faster future payments  
+👤 **Customer Profiles** - Automatic customer profile creation with payment method storage  
+🏪 **Vendor Management** - Full vendor registration, login, and dashboard  
 📊 **Transaction History** - View all completed payment transactions  
 ⏱️ **Payment Expiration** - QR codes expire after 15 minutes for security  
+🔒 **Secure & Encrypted** - All payment data encrypted and secured by Stripe  
 🎨 **Modern UI** - Beautiful, responsive design with smooth animations
+
+## New: Payment Method Collection
+
+When customers scan a vendor's QR code, the system can now:
+- ✅ Automatically detect and save payment methods
+- ✅ Create customer profiles based on phone/email
+- ✅ Allow one-tap payments with saved cards
+- ✅ Manage multiple payment methods per customer
+- ✅ Set default payment methods
+- ✅ Show saved cards on return visits
+
+### How It Works
+
+1. **First Time Payment**: Customer enters their details (phone/email) and payment info
+2. **Save Option**: Customer opts to save their card for future use
+3. **Automatic Profile**: System creates a customer profile linked to Stripe
+4. **Return Visit**: On next QR scan, system recognizes customer and shows saved cards
+5. **One-Tap Pay**: Customer selects saved card and pays instantly
 
 ## Tech Stack
 
 ### Backend
 - Node.js with Express
-- Stripe API for payments
+- Stripe API for payments & customer management
+- bcryptjs for password hashing
+- JWT for authentication
 - QRCode library for QR generation
-- UUID for unique payment IDs
+- UUID for unique IDs
 
 ### Frontend
 - React 18
@@ -25,6 +49,7 @@ A complete QR code-based payment system with React frontend and Node.js backend,
 - Stripe Elements for card input
 - Axios for API calls
 - Vite for fast development
+- Context API for state management
 
 ## Setup Instructions
 
@@ -217,17 +242,100 @@ QRPayment/
 - Check browser console for errors
 - Ensure payment was completed successfully
 
+### Saved cards not appearing
+- Check localStorage is enabled in browser
+- Verify customer profile was created
+- Check Stripe dashboard for customer data
+
+## Payment Method Collection Feature
+
+### Customer Flow
+1. **First Time**: Customer scans vendor QR → Enters contact info → Enters card → Opts to save
+2. **Return Visit**: Customer scans QR → System recognizes them → Shows saved cards → One-tap payment
+
+### API Endpoints for Payment Methods
+
+**Customer Management:**
+```javascript
+POST   /api/customer/profile                           // Create or retrieve customer
+GET    /api/customer/:identifier                       // Get customer & saved cards
+POST   /api/customer/:customerId/payment-method        // Save new payment method
+DELETE /api/customer/:customerId/payment-method/:id    // Remove payment method
+```
+
+**Payment with Saved Method:**
+```javascript
+POST   /api/vendor/:vendorId/payment-with-saved-method
+Body: {
+  amount: 50.00,
+  currency: "usd",
+  customerId: "customer-uuid",
+  paymentMethodId: "pm_xxx",
+  description: "Purchase"
+}
+```
+
+### Data Model
+
+**Customer:**
+- id, phone, email, name
+- stripeCustomerId
+- createdAt
+
+**Saved Payment Method:**
+- id (Stripe payment method ID)
+- brand (visa, mastercard, etc.)
+- last4
+- expMonth, expYear
+- isDefault
+
+### Security & Storage
+- Payment methods stored in Stripe, not locally
+- Only metadata (last4, brand) stored in app
+- Customer ID stored in browser localStorage
+- Full PCI compliance through Stripe
+
+## Market Opportunity
+
+This system is designed for the **$50B+ informal economy in MENA**:
+
+📊 **Market Size:**
+- 120 Million unbanked merchants
+- 58% unbanked rate in Egypt alone
+- 20-30% revenue lost to cash handling inefficiencies
+
+💡 **Solution:**
+- Simple QR/NFC lanyard for instant cashless payments
+- SMS + redeemable vouchers for AED 94 local transactions
+- Cross-border payments (Egypt → UAE)
+
+💰 **Revenue Model:**
+- 1% platform fee per transaction
+- **$500M revenue potential** at 5% market capture
+- **$1-2M seed funding** for 24-month UAE/Egypt pilot
+
 ## Future Enhancements
 
-- [ ] Add MongoDB for persistent storage
-- [ ] Implement user authentication
-- [ ] Add webhook handlers for Stripe events
-- [ ] Support multiple payment methods
-- [ ] Add email receipts
-- [ ] Implement refund functionality
-- [ ] Add payment analytics dashboard
-- [ ] Support for multiple currencies
-- [ ] Mobile app version
+**Completed:**
+- [x] Customer profile management
+- [x] Saved payment methods
+- [x] Vendor registration & authentication
+- [x] Permanent vendor QR codes
+- [x] Transaction tracking with fees
+
+**Roadmap:**
+- [ ] MongoDB for persistent storage
+- [ ] NFC tap-to-pay support
+- [ ] SMS voucher redemption system
+- [ ] Cross-border payment routing (EGP ↔ AED)
+- [ ] Mobile app (iOS/Android)
+- [ ] Stripe webhook handlers
+- [ ] Email/SMS receipts
+- [ ] Refund functionality
+- [ ] Analytics dashboard with charts
+- [ ] Multi-language (Arabic/English)
+- [ ] Offline payment queue
+- [ ] Local payment gateway integrations
 
 ## License
 
@@ -242,4 +350,5 @@ For issues or questions:
 
 ---
 
+**Street Wallet** - Unlocking the $50B Informal Economy 🚀  
 Built with ❤️ using React, Node.js, and Stripe

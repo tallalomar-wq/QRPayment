@@ -36,10 +36,15 @@ function VendorDashboard() {
         setTransactions(txns);
         
         // Calculate stats
-        const total = txns.reduce((sum, t) => sum + t.amount, 0);
+        const totalGross = txns.reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalPlatformFees = txns.reduce((sum, t) => sum + (t.platformFee || 0), 0);
+        const totalNet = txns.reduce((sum, t) => sum + (t.vendorAmount || 0), 0);
+        
         setStats({
           totalTransactions: txns.length,
-          totalRevenue: total,
+          totalRevenue: totalGross,
+          totalNet: totalNet,
+          totalPlatformFees: totalPlatformFees,
           pendingPayments: 0
         });
       }
@@ -153,8 +158,24 @@ function VendorDashboard() {
         <div className="stat-card">
           <div className="stat-icon">💰</div>
           <div className="stat-content">
-            <div className="stat-label">Total Revenue</div>
+            <div className="stat-label">Gross Revenue</div>
             <div className="stat-value">{formatCurrency(stats.totalRevenue)}</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">💳</div>
+          <div className="stat-content">
+            <div className="stat-label">Platform Fees (1%)</div>
+            <div className="stat-value">{formatCurrency(stats.totalPlatformFees || 0)}</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <div className="stat-label">Net Revenue</div>
+            <div className="stat-value">{formatCurrency(stats.totalNet || 0)}</div>
           </div>
         </div>
 
@@ -163,14 +184,6 @@ function VendorDashboard() {
           <div className="stat-content">
             <div className="stat-label">Total Transactions</div>
             <div className="stat-value">{stats.totalTransactions}</div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon">⏳</div>
-          <div className="stat-content">
-            <div className="stat-label">Pending Payments</div>
-            <div className="stat-value">{stats.pendingPayments}</div>
           </div>
         </div>
       </div>
@@ -300,7 +313,10 @@ function VendorDashboard() {
               <thead>
                 <tr>
                   <th>Date</th>
+                  <th>Customer</th>
                   <th>Amount</th>
+                  <th>Platform Fee (1%)</th>
+                  <th>Net Amount</th>
                   <th>Status</th>
                   <th>Payment ID</th>
                 </tr>
@@ -309,8 +325,22 @@ function VendorDashboard() {
                 {transactions.map((transaction) => (
                   <tr key={transaction.id}>
                     <td>{formatDate(transaction.timestamp)}</td>
+                    <td>
+                      {transaction.customerName || transaction.customerEmail || 'Guest'}
+                      {transaction.paymentMethodLast4 && (
+                        <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                          •••• {transaction.paymentMethodLast4}
+                        </div>
+                      )}
+                    </td>
                     <td className="amount-value">
                       {formatCurrency(transaction.amount, transaction.currency)}
+                    </td>
+                    <td className="amount-value">
+                      {formatCurrency(transaction.platformFee || 0, transaction.currency)}
+                    </td>
+                    <td className="amount-value">
+                      {formatCurrency(transaction.vendorAmount || transaction.amount, transaction.currency)}
                     </td>
                     <td>
                       <span className={`badge badge-${transaction.status}`}>

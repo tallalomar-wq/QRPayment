@@ -16,14 +16,29 @@ function VendorPaymentPage() {
   const [success, setSuccess] = useState(false);
   const [transaction, setTransaction] = useState(null);
   
+  // Customer info
+  const [customer, setCustomer] = useState(null);
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [saveCard, setSaveCard] = useState(false);
+  const [showSavedCards, setShowSavedCards] = useState(false);
+  
   const [formData, setFormData] = useState({
     amount: '',
     currency: 'usd',
-    description: ''
+    description: '',
+    phone: '',
+    email: '',
+    name: ''
   });
 
   useEffect(() => {
     fetchVendorInfo();
+    // Try to load customer info from localStorage
+    const savedCustomerId = localStorage.getItem('customerId');
+    if (savedCustomerId) {
+      loadCustomerInfo(savedCustomerId);
+    }
   }, [vendorId]);
 
   const fetchVendorInfo = async () => {
@@ -39,11 +54,85 @@ function VendorPaymentPage() {
     }
   };
 
+  const loadCustomerInfo = async (customerId) => {
+    try {
+      const response = await api.get(`/customer/${customerId}`);
+      if (response.data.success) {
+        setCustomer(response.data.customer);
+        setSavedPaymentMethods(response.data.savedPaymentMethods || []);
+        if (response.data.savedPaymentMethods && response.data.savedPaymentMethods.length > 0) {
+          setShowSavedCards(true);
+          // Select default or first card
+          const defaultCard = response.data.savedPaymentMethods.find(m => m.isDefault);
+          setSelectedPaymentMethod(defaultCard || response.data.savedPaymentMethods[0]);
+        }
+      }
+    } catch (err) {
+      console.log('No existing customer found');
+    }
+  };
+
+  const createOrGetCustomer = async () => {
+    try {
+      const response = await api.post('/customer/profile', {
+        phone: formData.phone,
+        email: formData.email,
+        name: formData.name
+      });
+      
+      if (response.data.success) {
+        setCustomer(response.data.customer);
+        setSavedPaymentMethods(response.data.savedPaymentMethods || []);
+        localStorage.setItem('customerId', response.data.customer.id);
+        return response.data.customer;
+      }
+    } catch (err) {
+      console.error('Error creating customer:', err);
+      return null;
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleSubmitWithSavedCard = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    if (!selectedPaymentMethod) {
+      setError('Please select a payment method');
+      return;
+    }
+
+    setProcessing(true);
+    setError('');
+
+    try {
+      const response = await api.post(`/vendor/${vendorId}/payment-with-saved-method`, {
+        amount: parseFloat(formData.amount),
+        currency: formData.currency,
+        description: formData.description,
+        customerId: customer.id,
+        paymentMethodId: selectedPaymentMethod.id
+      });
+
+      if (response.data.success) {
+        setSuccess(true);
+        setTransaction(response.data.transaction);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -62,16 +151,42 @@ function VendorPaymentPage() {
     setError('');
 
     try {
+      // Create or get customer profile if saving card or customer info provided
+      let currentCustomer = customer;
+      if (saveCard || (formData.phone || formData.email)) {
+        if (!currentCustomer) {
+          currentCustomer = await createOrGetCustomer();
+        }
+      }
+
       // Create payment method
       const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
         type: 'card',
         card: elements.getElement(CardElement),
+        billing_details: {
+          email: formData.email || undefined,
+          phone: formData.phone || undefined,
+          name: formData.name || undefined
+        }
       });
 
       if (stripeError) {
         setError(stripeError.message);
         setProcessing(false);
         return;
+      }
+
+      // Save payment method if requested
+      if (saveCard && currentCustomer) {
+        try {
+          await api.post(`/customer/${currentCustomer.id}/payment-method`, {
+            paymentMethodId: paymentMethod.id,
+            setAsDefault: savedPaymentMethods.length === 0
+          });
+        } catch (saveError) {
+          console.error('Error saving payment method:', saveError);
+          // Continue with payment even if saving fails
+        }
       }
 
       // Process payment to vendor
@@ -85,6 +200,11 @@ function VendorPaymentPage() {
       if (response.data.success) {
         setSuccess(true);
         setTransaction(response.data.transaction);
+        
+        // Reload customer info to get updated saved cards
+        if (currentCustomer && saveCard) {
+          loadCustomerInfo(currentCustomer.id);
+        }
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Payment failed. Please try again.');
@@ -159,12 +279,20 @@ function VendorPaymentPage() {
             </div>
           </div>
 
-          <button 
-            onClick={() => window.location.reload()}
-            className="button button-primary"
-          >
-            Make Another Payment
-          </button>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <button 
+              onClick={() => window.location.href = '/vendor/dashboard'}
+              className="button button-secondary"
+            >
+              ← Back to Dashboard
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="button button-primary"
+            >
+              Make Another Payment
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -185,7 +313,103 @@ function VendorPaymentPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="payment-form">
+        {/* Show saved payment methods if available */}
+        {customer && savedPaymentMethods.length > 0 && (
+          <div className="saved-cards-section">
+            <div className="section-header">
+              <h3>Saved Payment Methods</h3>
+              <button 
+                type="button"
+                onClick={() => setShowSavedCards(!showSavedCards)}
+                className="button button-link"
+              >
+                {showSavedCards ? 'Use New Card' : 'Use Saved Card'}
+              </button>
+            </div>
+
+            {showSavedCards && (
+              <div className="saved-cards-list">
+                {savedPaymentMethods.map((method) => (
+                  <div 
+                    key={method.id}
+                    className={`saved-card-item ${selectedPaymentMethod?.id === method.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedPaymentMethod(method)}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={selectedPaymentMethod?.id === method.id}
+                      onChange={() => setSelectedPaymentMethod(method)}
+                    />
+                    <div className="card-info">
+                      <span className="card-brand">{method.brand.toUpperCase()}</span>
+                      <span className="card-number">•••• {method.last4}</span>
+                      <span className="card-exp">{method.expMonth}/{method.expYear}</span>
+                    </div>
+                    {method.isDefault && <span className="badge badge-info">Default</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={showSavedCards && selectedPaymentMethod ? handleSubmitWithSavedCard : handleSubmit} className="payment-form">
+          {/* Customer Information Section */}
+          {!customer && (
+            <div className="customer-info-section">
+              <h3>Your Information (Optional)</h3>
+              <p className="info-note">Provide your details to save payment methods for faster checkout next time</p>
+              
+              <div className="form-group">
+                <label htmlFor="name">Name</label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="John Doe"
+                  className="input"
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="email">Email</label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="john@example.com"
+                    className="input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="phone">Phone</label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="+1234567890"
+                    className="input"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {customer && (
+            <div className="customer-badge">
+              👤 Welcome back, {customer.name || customer.email || 'Customer'}
+            </div>
+          )}
+
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="amount">Amount *</label>
@@ -215,7 +439,8 @@ function VendorPaymentPage() {
                 <option value="usd">USD</option>
                 <option value="eur">EUR</option>
                 <option value="gbp">GBP</option>
-                <option value="jpy">JPY</option>
+                <option value="aed">AED</option>
+                <option value="egp">EGP</option>
               </select>
             </div>
           </div>
@@ -233,48 +458,81 @@ function VendorPaymentPage() {
             />
           </div>
 
-          <div className="form-group">
-            <label>Card Details</label>
-            <div className="card-element-container">
-              <CardElement 
-                options={{
-                  style: {
-                    base: {
-                      fontSize: '16px',
-                      color: '#333',
-                      '::placeholder': {
-                        color: '#aab7c4',
+          {/* Show card element only if not using saved card */}
+          {(!showSavedCards || !selectedPaymentMethod) && (
+            <>
+              <div className="form-group">
+                <label>Card Details *</label>
+                <div className="card-element-container">
+                  <CardElement 
+                    options={{
+                      style: {
+                        base: {
+                          fontSize: '16px',
+                          color: '#333',
+                          '::placeholder': {
+                            color: '#aab7c4',
+                          },
+                        },
+                        invalid: {
+                          color: '#e74c3c',
+                        },
                       },
-                    },
-                    invalid: {
-                      color: '#e74c3c',
-                    },
-                  },
-                }}
-              />
-            </div>
-          </div>
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Save card checkbox */}
+              {(formData.email || formData.phone || customer) && (
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={saveCard}
+                      onChange={(e) => setSaveCard(e.target.checked)}
+                    />
+                    <span>Save this card for future payments</span>
+                  </label>
+                </div>
+              )}
+            </>
+          )}
 
           {formData.amount && (
             <div className="payment-preview">
-              <div className="preview-label">You will pay:</div>
-              <div className="preview-amount">
-                {formatCurrency(parseFloat(formData.amount), formData.currency)}
+              <div className="preview-row">
+                <span className="preview-label">Payment Amount:</span>
+                <span className="preview-amount">
+                  {formatCurrency(parseFloat(formData.amount), formData.currency)}
+                </span>
+              </div>
+              <div className="preview-row small">
+                <span className="preview-label">Platform Fee (1%):</span>
+                <span className="preview-value">
+                  {formatCurrency(parseFloat(formData.amount) * 0.01, formData.currency)}
+                </span>
+              </div>
+              <div className="preview-row small">
+                <span className="preview-label">Vendor Receives:</span>
+                <span className="preview-value">
+                  {formatCurrency(parseFloat(formData.amount) * 0.99, formData.currency)}
+                </span>
               </div>
             </div>
           )}
 
           <button 
             type="submit" 
-            disabled={!stripe || processing}
+            disabled={!stripe || processing || (showSavedCards && !selectedPaymentMethod && savedPaymentMethods.length > 0)}
             className="button button-primary button-pay"
           >
-            {processing ? 'Processing...' : `Pay ${vendor.businessName}`}
+            {processing ? 'Processing...' : `Pay ${formatCurrency(parseFloat(formData.amount) || 0, formData.currency)}`}
           </button>
         </form>
 
         <div className="security-badge">
-          🔒 Secured by Stripe
+          🔒 Secured by Stripe • Your payment information is encrypted
         </div>
       </div>
     </div>
