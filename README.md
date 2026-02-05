@@ -1,6 +1,11 @@
-# QR Payment System
+# QR Payment System (Street Wallet)
 
 A complete QR code-based payment system with React frontend and Node.js backend, integrated with Stripe for payment processing. Designed for the informal economy with focus on simplicity and cashless transactions.
+
+## Live Deployment
+
+🌐 **Frontend:** https://qr-payment-app-two.vercel.app  
+🔧 **Backend:** https://qrpayment-7vpm.onrender.com
 
 ## Features
 
@@ -8,6 +13,9 @@ A complete QR code-based payment system with React frontend and Node.js backend,
 📱 **Mobile-Friendly** - Scan QR codes with any device to make payments  
 💳 **Stripe Integration** - Secure payment processing with Stripe  
 💾 **Save Payment Methods** - Customers can save cards for faster future payments  
+🔐 **OTP Security** - SMS verification for cash withdrawal via Twilio  
+👤 **User-to-User Transfers** - Send money by scanning personal QR codes  
+🏪 **Vendor Permanent QR** - Businesses get permanent QR codes for their storefront  
 👤 **Customer Profiles** - Automatic customer profile creation with payment method storage  
 🏪 **Vendor Management** - Full vendor registration, login, and dashboard  
 📊 **Transaction History** - View all completed payment transactions  
