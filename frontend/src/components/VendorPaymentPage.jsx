@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { api } from '../utils/api';
@@ -15,6 +15,8 @@ function VendorPaymentPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [transaction, setTransaction] = useState(null);
+  const [paymentMode, setPaymentMode] = useState('wallet');
+  const [walletOption, setWalletOption] = useState('wallet_balance');
   
   // Customer info
   const [customer, setCustomer] = useState(null);
@@ -31,6 +33,24 @@ function VendorPaymentPage() {
     email: '',
     name: ''
   });
+
+  const availableWalletOptions = useMemo(() => {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const options = [
+      { id: 'wallet_balance', label: 'Street Wallet Balance' },
+      { id: 'bank_transfer', label: 'Bank Transfer' }
+    ];
+
+    if (isIOS) {
+      options.unshift({ id: 'apple_pay', label: 'Apple Pay (if enabled)' });
+    } else if (isAndroid) {
+      options.unshift({ id: 'google_pay', label: 'Google Pay (if enabled)' });
+    }
+
+    return options;
+  }, []);
 
   useEffect(() => {
     fetchVendorInfo();
@@ -213,6 +233,38 @@ function VendorPaymentPage() {
     }
   };
 
+  const handleWalletPay = async (e) => {
+    e.preventDefault();
+
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    setProcessing(true);
+    setError('');
+
+    try {
+      const response = await api.post(`/vendor/${vendorId}/wallet-pay`, {
+        amount: parseFloat(formData.amount),
+        currency: formData.currency,
+        description: formData.description,
+        payerName: formData.name,
+        payerPhone: formData.phone,
+        paymentOption: walletOption
+      });
+
+      if (response.data.success) {
+        setSuccess(true);
+        setTransaction(response.data.transaction);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const formatCurrency = (amount, currency) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -277,6 +329,16 @@ function VendorPaymentPage() {
               <span className="detail-label">Status:</span>
               <span className="badge badge-success">{transaction?.status}</span>
             </div>
+
+            {transaction?.otpSent && (
+              <div className="detail-row">
+                <span className="detail-label">Cash-out Code:</span>
+                <span className="detail-value">
+                  Sent to {transaction?.otpPhoneMasked || 'your phone'}
+                  {transaction?.otpTestCode ? ` (Test: ${transaction.otpTestCode})` : ''}
+                </span>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
@@ -314,7 +376,7 @@ function VendorPaymentPage() {
         )}
 
         {/* Show saved payment methods if available */}
-        {customer && savedPaymentMethods.length > 0 && (
+        {paymentMode === 'card' && customer && savedPaymentMethods.length > 0 && (
           <div className="saved-cards-section">
             <div className="section-header">
               <h3>Saved Payment Methods</h3>
@@ -354,7 +416,7 @@ function VendorPaymentPage() {
           </div>
         )}
 
-        <form onSubmit={showSavedCards && selectedPaymentMethod ? handleSubmitWithSavedCard : handleSubmit} className="payment-form">
+        <form onSubmit={paymentMode === 'wallet' ? handleWalletPay : (showSavedCards && selectedPaymentMethod ? handleSubmitWithSavedCard : handleSubmit)} className="payment-form">
           {/* Customer Information Section */}
           {!customer && (
             <div className="customer-info-section">
@@ -446,6 +508,53 @@ function VendorPaymentPage() {
           </div>
 
           <div className="form-group">
+            <label>Payment Mode</label>
+            <div className="payment-mode-toggle">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="card"
+                  checked={paymentMode === 'card'}
+                  onChange={() => setPaymentMode('card')}
+                />
+                <span>Card (POS-style)</span>
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="wallet"
+                  checked={paymentMode === 'wallet'}
+                  onChange={() => setPaymentMode('wallet')}
+                />
+                <span>Street Wallet (No POS)</span>
+              </label>
+            </div>
+          </div>
+
+          {paymentMode === 'wallet' && (
+            <div className="wallet-options">
+              <label>Detected Payment Options</label>
+              <div className="wallet-options-grid">
+                {availableWalletOptions.map((option) => (
+                  <label key={option.id} className="radio-label">
+                    <input
+                      type="radio"
+                      name="walletOption"
+                      value={option.id}
+                      checked={walletOption === option.id}
+                      onChange={() => setWalletOption(option.id)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="small-hint">Choose the option available on your phone to send money instantly.</p>
+            </div>
+          )}
+
+          <div className="form-group">
             <label htmlFor="description">Note (Optional)</label>
             <input
               type="text"
@@ -459,7 +568,7 @@ function VendorPaymentPage() {
           </div>
 
           {/* Show card element only if not using saved card */}
-          {(!showSavedCards || !selectedPaymentMethod) && (
+          {paymentMode === 'card' && (!showSavedCards || !selectedPaymentMethod) && (
             <>
               <div className="form-group">
                 <label>Card Details *</label>
@@ -524,7 +633,7 @@ function VendorPaymentPage() {
 
           <button 
             type="submit" 
-            disabled={!stripe || processing || (showSavedCards && !selectedPaymentMethod && savedPaymentMethods.length > 0)}
+            disabled={paymentMode === 'card' ? (!stripe || processing || (showSavedCards && !selectedPaymentMethod && savedPaymentMethods.length > 0)) : processing}
             className="button button-primary button-pay"
           >
             {processing ? 'Processing...' : `Pay ${formatCurrency(parseFloat(formData.amount) || 0, formData.currency)}`}

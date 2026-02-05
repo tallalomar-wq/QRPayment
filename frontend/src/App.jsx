@@ -7,6 +7,8 @@ import VendorLogin from './components/VendorLogin';
 import VendorRegister from './components/VendorRegister';
 import VendorDashboard from './components/VendorDashboard';
 import VendorPaymentPage from './components/VendorPaymentPage';
+import UserQRCode from './components/UserQRCode';
+import UserTransferPage from './components/UserTransferPage';
 import GeneratePayment from './components/GeneratePayment';
 import PaymentPage from './components/PaymentPage';
 import TransactionList from './components/TransactionList';
@@ -48,6 +50,7 @@ function AppContent() {
             {isAuthenticated ? (
               <>
                 <Link to="/vendor/dashboard" className="nav-link">Dashboard</Link>
+                <Link to="/user/qr" className="nav-link">Personal QR</Link>
                 <span className="nav-vendor">👤 {vendor?.businessName}</span>
                 <button onClick={logout} className="nav-link nav-logout">Logout</button>
               </>
@@ -55,6 +58,7 @@ function AppContent() {
               <>
                 <Link to="/vendor/login" className="nav-link">Login</Link>
                 <Link to="/vendor/register" className="nav-link">Register</Link>
+                <Link to="/user/qr" className="nav-link">Personal QR</Link>
               </>
             )}
           </div>
@@ -85,6 +89,8 @@ function AppContent() {
           {/* Payment Pages (Public - anyone with QR can pay) */}
           <Route path="/pay/:paymentId" element={<PaymentPage />} />
           <Route path="/pay-vendor/:vendorId" element={<VendorPaymentPage />} />
+          <Route path="/pay-user/:userId" element={<UserTransferPage />} />
+          <Route path="/user/qr" element={<UserQRCode />} />
           
           {/* Redirect root to login or dashboard */}
           <Route path="/" element={

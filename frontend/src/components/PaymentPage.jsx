@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { api } from '../utils/api';
@@ -14,6 +14,28 @@ function PaymentPage() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [paymentMode, setPaymentMode] = useState('wallet');
+  const [walletOption, setWalletOption] = useState('wallet_balance');
+  const [payerName, setPayerName] = useState('');
+  const [payerPhone, setPayerPhone] = useState('');
+
+  const availableWalletOptions = useMemo(() => {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const options = [
+      { id: 'wallet_balance', label: 'Street Wallet Balance' },
+      { id: 'bank_transfer', label: 'Bank Transfer' }
+    ];
+
+    if (isIOS) {
+      options.unshift({ id: 'apple_pay', label: 'Apple Pay (if enabled)' });
+    } else if (isAndroid) {
+      options.unshift({ id: 'google_pay', label: 'Google Pay (if enabled)' });
+    }
+
+    return options;
+  }, []);
 
   useEffect(() => {
     fetchPaymentDetails();
@@ -64,6 +86,30 @@ function PaymentPage() {
       // Process payment
       const response = await api.post(`/payment/${paymentId}/process`, {
         paymentMethodId: paymentMethod.id
+      });
+
+      if (response.data.success) {
+        setSuccess(true);
+        setPayment(response.data.payment);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleWalletPay = async (e) => {
+    e.preventDefault();
+
+    setProcessing(true);
+    setError('');
+
+    try {
+      const response = await api.post(`/payment/${paymentId}/wallet`, {
+        payerName,
+        payerPhone,
+        paymentOption: walletOption
       });
 
       if (response.data.success) {
@@ -134,6 +180,16 @@ function PaymentPage() {
               <span className="detail-label">Status:</span>
               <span className="badge badge-success">{payment.status}</span>
             </div>
+
+            {payment.otpSent && (
+              <div className="detail-row">
+                <span className="detail-label">Cash-out Code:</span>
+                <span className="detail-value">
+                  Sent to {payment.otpPhoneMasked || 'your phone'}
+                  {payment.otpTestCode ? ` (Test: ${payment.otpTestCode})` : ''}
+                </span>
+              </div>
+            )}
           </div>
 
           <button 
@@ -174,32 +230,108 @@ function PaymentPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="payment-form">
+        <form onSubmit={paymentMode === 'wallet' ? handleWalletPay : handleSubmit} className="payment-form">
           <div className="form-group">
-            <label>Card Details</label>
-            <div className="card-element-container">
-              <CardElement 
-                options={{
-                  style: {
-                    base: {
-                      fontSize: '16px',
-                      color: '#333',
-                      '::placeholder': {
-                        color: '#aab7c4',
-                      },
-                    },
-                    invalid: {
-                      color: '#e74c3c',
-                    },
-                  },
-                }}
-              />
+            <label>Payment Mode</label>
+            <div className="payment-mode-toggle">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="card"
+                  checked={paymentMode === 'card'}
+                  onChange={() => setPaymentMode('card')}
+                />
+                <span>Card (POS-style)</span>
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="wallet"
+                  checked={paymentMode === 'wallet'}
+                  onChange={() => setPaymentMode('wallet')}
+                />
+                <span>Street Wallet (No POS)</span>
+              </label>
             </div>
           </div>
 
+          {paymentMode === 'wallet' && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="payerName">Your Name (Optional)</label>
+                  <input
+                    type="text"
+                    id="payerName"
+                    value={payerName}
+                    onChange={(e) => setPayerName(e.target.value)}
+                    placeholder="John Doe"
+                    className="input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="payerPhone">Phone (Optional)</label>
+                  <input
+                    type="tel"
+                    id="payerPhone"
+                    value={payerPhone}
+                    onChange={(e) => setPayerPhone(e.target.value)}
+                    placeholder="+123456789"
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              <div className="wallet-options">
+                <label>Detected Payment Options</label>
+                <div className="wallet-options-grid">
+                  {availableWalletOptions.map((option) => (
+                    <label key={option.id} className="radio-label">
+                      <input
+                        type="radio"
+                        name="walletOption"
+                        value={option.id}
+                        checked={walletOption === option.id}
+                        onChange={() => setWalletOption(option.id)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="small-hint">Choose how to pay from your phone wallet.</p>
+              </div>
+            </>
+          )}
+
+          {paymentMode === 'card' && (
+            <div className="form-group">
+              <label>Card Details</label>
+              <div className="card-element-container">
+                <CardElement 
+                  options={{
+                    style: {
+                      base: {
+                        fontSize: '16px',
+                        color: '#333',
+                        '::placeholder': {
+                          color: '#aab7c4',
+                        },
+                      },
+                      invalid: {
+                        color: '#e74c3c',
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <button 
             type="submit" 
-            disabled={!stripe || processing || payment.status !== 'pending'}
+            disabled={paymentMode === 'card' ? (!stripe || processing || payment.status !== 'pending') : (processing || payment.status !== 'pending')}
             className="button button-primary button-pay"
           >
             {processing ? 'Processing...' : `Pay ${formatCurrency(payment.amount, payment.currency)}`}
