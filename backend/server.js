@@ -416,6 +416,68 @@ app.post('/api/payment/:id/wallet', async (req, res) => {
   }
 });
 
+// Vendor Payment via Card (Permanent QR)
+app.post('/api/vendor/:vendorId/payment', async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    const { amount, currency = 'usd', description, paymentMethodId } = req.body;
+
+    const vendor = vendors.get(vendorId);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    if (!paymentMethodId) {
+      return res.status(400).json({ error: 'Payment method required' });
+    }
+
+    // Create Stripe Payment Intent
+    const paymentIntent = await stripeClient.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency,
+      payment_method: paymentMethodId,
+      confirm: true,
+      description: `Payment to ${vendor.businessName}: ${description || 'Purchase'}`,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never'
+      }
+    });
+
+    const platformFee = parseFloat((amount * 0.01).toFixed(2));
+    const vendorAmount = parseFloat((amount - platformFee).toFixed(2));
+
+    const transaction = {
+      id: uuidv4(),
+      vendorId,
+      vendorName: vendor.businessName,
+      amount,
+      currency,
+      description,
+      status: 'completed',
+      timestamp: new Date().toISOString(),
+      paymentChannel: 'stripe_card',
+      stripePaymentIntentId: paymentIntent.id,
+      platformFee,
+      vendorAmount
+    };
+
+    transactions.push(transaction);
+
+    res.json({
+      success: true,
+      transaction
+    });
+  } catch (error) {
+    console.error('Error processing vendor card payment:', error);
+    res.status(500).json({ error: error.message || 'Failed to process payment' });
+  }
+});
+
 // Vendor Payment via Street Wallet (Permanent QR)
 app.post('/api/vendor/:vendorId/wallet-pay', (req, res) => {
   try {
