@@ -644,7 +644,11 @@ app.get('/api/transactions', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'OK', 
+    version: '1.0.0',
+    timestamp: new Date().toISOString() 
+  });
 });
 
 const PORT = process.env.PORT || 5000;
