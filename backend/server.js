@@ -31,34 +31,6 @@ const otpStore = new Map();
 
 const createToken = () => uuidv4();
 
-// Initialize Quick Fix Plumbing vendor on startup
-async function initializeDefaultVendor() {
-  const vendorId = 'default-vendor-quickfix';
-  const vendor = {
-    id: vendorId,
-    name: 'John Smith',
-    email: 'quickfix@plumbing.com',
-    password: 'plumbing123', // In production, hash this!
-    businessName: 'Quick Fix Plumbing',
-    vendorPaymentUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/vendor/${vendorId}/pay`,
-    vendorQRCode: null,
-    createdAt: new Date().toISOString()
-  };
-  
-  // Generate QR code
-  try {
-    vendor.vendorQRCode = await QRCode.toDataURL(vendor.vendorPaymentUrl);
-  } catch (err) {
-    console.error('Failed to generate QR code:', err);
-  }
-  
-  vendors.set(vendorId, vendor);
-  console.log('✅ Default vendor initialized: Quick Fix Plumbing');
-}
-
-// Initialize on startup
-initializeDefaultVendor();
-
 const requireVendorAuth = (req, res, next) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
