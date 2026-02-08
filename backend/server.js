@@ -9,7 +9,9 @@ const twilio = require('twilio');
 dotenv.config();
 
 const app = express();
-const stripeClient = stripe(process.env.STRIPE_SECRET_KEY);
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+console.log('🔑 Stripe key loaded:', stripeKey ? `${stripeKey.substring(0, 20)}...` : 'MISSING');
+const stripeClient = stripe(stripeKey);
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
