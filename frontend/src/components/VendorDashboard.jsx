@@ -106,6 +106,27 @@ function VendorDashboard() {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+        <p>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (!vendor) {
+    return (
+      <div className="error-container">
+        <h2>⚠️ Not Logged In</h2>
+        <p>Please log in to access the vendor dashboard.</p>
+        <button onClick={() => navigate('/vendor/login')} className="button button-primary">
+          Go to Login
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="vendor-dashboard">
       <div className="dashboard-header">
