@@ -89,13 +89,12 @@ function AppContent() {
           {/* Payment Pages (Public - anyone with QR can pay) */}
           <Route path="/pay/:paymentId" element={<PaymentPage />} />
           <Route path="/pay-vendor/:vendorId" element={<VendorPaymentPage />} />
+          <Route path="/vendor/:vendorId/pay" element={<VendorPaymentPage />} />
           <Route path="/pay-user/:userId" element={<UserTransferPage />} />
           <Route path="/user/qr" element={<UserQRCode />} />
           
-          {/* Redirect root to login or dashboard */}
-          <Route path="/" element={
-            isAuthenticated ? <Navigate to="/vendor/dashboard" /> : <Navigate to="/vendor/login" />
-          } />
+          {/* Redirect root to login */}
+          <Route path="/" element={<Navigate to="/vendor/login" />} />
         </Routes>
       </main>
 
