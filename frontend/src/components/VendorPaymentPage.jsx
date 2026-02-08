@@ -282,12 +282,23 @@ function VendorPaymentPage() {
     );
   }
 
-  if (!vendor && !loading) {
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="card">
+          <div className="loading-spinner"></div>
+          <p style={{ textAlign: 'center', marginTop: '1rem' }}>Loading payment page...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!vendor) {
     return (
       <div className="container">
         <div className="card">
           <div className="alert alert-error">
-            Vendor not found
+            {error || 'Vendor not found'}
           </div>
           <button 
             onClick={() => navigate('/')}
